@@ -4,17 +4,21 @@ import (
 	"errors"
 
 	"example.com/orders/internal/model"
-	"example.com/orders/internal/repository"
 )
 
 var ErrEmptyCustomer = errors.New("имя клиента не задано")
 
+type Repository interface {
+	Save(model.Order) error
+	ByID(int) (model.Order, error)
+}
+
 type Service struct {
-	repo   *repository.Memory
+	repo   Repository
 	nextID int
 }
 
-func NewService(repo *repository.Memory) *Service {
+func NewService(repo Repository) *Service {
 	return &Service{repo: repo, nextID: 1}
 }
 
