@@ -26,7 +26,9 @@ func Sum(values []int64) int64 {
 }
 
 func Min(values []int64) int64 {
-	if (len(values) == 0) {return 0}
+	if len(values) == 0 {
+		return 0
+	}
 	min := int64(values[0])
 	for _, n := range values {
 		if n < min {
@@ -37,7 +39,9 @@ func Min(values []int64) int64 {
 }
 
 func Max(values []int64) int64 {
-	if (len(values) == 0) {return 0}
+	if len(values) == 0 {
+		return 0
+	}
 	max := int64(values[0])
 	for _, n := range values {
 		if n > max {
@@ -48,7 +52,9 @@ func Max(values []int64) int64 {
 }
 
 func Average(values []int64) float64 {
-	if (len(values) == 0) {return 0}
+	if len(values) == 0 {
+		return 0
+	}
 	sum := int64(0)
 	for _, n := range values {
 		sum += n
