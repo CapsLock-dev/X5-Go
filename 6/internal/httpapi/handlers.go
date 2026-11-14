@@ -14,8 +14,8 @@ import (
 func NewRouter(store *model.Store) http.Handler {
 	r := chi.NewRouter()
 	r.Use(RequestID)
-	r.Use(Recovery)
 	r.Use(Logger)
+	r.Use(Recovery)
 	r.Get("/health", health)
 	r.Route("/orders", func(r chi.Router) {
 		r.Post("/", createOrder(store))
@@ -42,7 +42,8 @@ func createOrder(store *model.Store) http.HandlerFunc {
 			writeJSON(w, 400, map[string]string{"error": "Invalid JSON"})
 			return
 		}
-		if strings.TrimSpace(data.Customer) == "" {
+		data.Customer = strings.TrimSpace(data.Customer)
+		if data.Customer == "" {
 			writeJSON(w, 400, map[string]string{"error": "Customer is empty"})
 			return
 		}

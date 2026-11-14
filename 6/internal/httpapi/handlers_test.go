@@ -1,15 +1,18 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi/v5"
 	"homework6/internal/httpapi"
 	"homework6/internal/model"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // До реализации health этот тест должен быть красным.
@@ -126,9 +129,16 @@ func TestGetOrder(t *testing.T) {
 }
 
 func TestRecovery(t *testing.T) {
+	var logBuffer bytes.Buffer
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logBuffer, nil)))
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
 	r := httpapi.NewRouter(model.NewStore())
 	r.(*chi.Mux).Get("/panic-test", func(w http.ResponseWriter, r *http.Request) {
-		panic("panic")
+		panic("client-data")
 	})
 	req := httptest.NewRequest(http.MethodGet, "/panic-test", strings.NewReader(""))
 	rec := httptest.NewRecorder()
@@ -144,5 +154,15 @@ func TestRecovery(t *testing.T) {
 	}
 	if body.Error != "Internal server error" {
 		t.Fatalf("error in body=%q", body.Error)
+	}
+	logOutput := logBuffer.String()
+	if !strings.Contains(logOutput, "http_request") {
+		t.Fatalf("access log not found: %s", logOutput)
+	}
+	if !strings.Contains(logOutput, "status=500") {
+		t.Fatalf("access log must contain status=500: %s", logOutput)
+	}
+	if strings.Contains(logOutput, "client-data") {
+		t.Fatalf("panic value leaked into logs: %s", logOutput)
 	}
 }
