@@ -5,10 +5,18 @@ import (
 	"net/http"
 	"os"
 
+	_ "example.com/order-service/docs"
 	"example.com/order-service/internal/handler"
 	"example.com/order-service/internal/repository/memory"
 	"example.com/order-service/internal/service"
 )
+
+// @title           Order Service API
+// @version         1.0
+// @description     Implements order creation, retrieval, status update and history
+// @host            127.0.0.1:8080
+// @BasePath        /api/v1
+// @schemes         http
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))

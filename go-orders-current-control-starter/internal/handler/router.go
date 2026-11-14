@@ -11,6 +11,7 @@ import (
 
 	"example.com/order-service/internal/order"
 	"github.com/go-chi/chi/v5"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type OrderService interface {
@@ -29,10 +30,11 @@ type Handler struct {
 func NewRouter(service OrderService, logger *slog.Logger) http.Handler {
 	h := &Handler{service: service, logger: logger}
 	router := chi.NewRouter()
-	router.Use(recoveryMiddleware(logger))
 	router.Use(requestLoggingMiddleware(logger))
+	router.Use(recoveryMiddleware(logger))
 
 	router.Get("/health", h.health)
+	router.Get("/swagger/*", httpSwagger.Handler())
 	router.Route("/api/v1/orders", func(r chi.Router) {
 		r.Post("/", h.postOrders)
 		r.Get("/", h.getOrderList)
@@ -48,91 +50,149 @@ func (h *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+// PostOrder godoc
+// @Summary      Create order
+// @Description  Creates order, computes total price, assigns ID and new status
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Param        input body order.CreateOrderInput true "Order items"
+// @Success      201  {object} 	order.Order
+// @Failure      400  {object}  handler.ErrorResponse "Invalid JSON or order"
+// @Failure      500  {object}  handler.ErrorResponse "Internal error"
+// @Router       /orders [post]
 func (h *Handler) postOrders(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	decoder := json.NewDecoder(r.Body)
 	var data order.CreateOrderInput
-	err := decoder.Decode(&data)
-	if err != nil {
-		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+	if err := decoder.Decode(&data); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "Invalid JSON",
+			Code:  ecInvalidJSON,
+		})
 		return
 	}
 	ord, err := h.service.Create(r.Context(), data)
 	if err != nil {
 		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+		writeJSON(w, pe.Status, pe.ErrorResponse)
 		return
 	}
 	w.Header().Set("Location", fmt.Sprintf("/api/v1/orders/%d", ord.ID))
 	writeJSON(w, http.StatusCreated, ord)
 }
 
+// GetOrder godoc
+// @Summary      Get order
+// @Description  Retrieves order by ID
+// @Tags         orders
+// @Produce      json
+// @Param        id path int true "Order ID"
+// @Success      200  {object} 	order.Order
+// @Failure      400  {object}  handler.ErrorResponse "Invalid ID"
+// @Failure      404  {object}  handler.ErrorResponse "Order not found"
+// @Failure      500  {object}  handler.ErrorResponse "Internal error"
+// @Router       /orders/{id} [get]
 func (h *Handler) getOrder(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
 		return
 	}
 	ord, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+		writeJSON(w, pe.Status, pe.ErrorResponse)
 		return
 	}
 	writeJSON(w, http.StatusOK, ord)
 }
 
+// GetOrderList godoc
+// @Summary      Get list of orders
+// @Description  Retrieves list of orders
+// @Tags         orders
+// @Produce      json
+// @Success      200  {object} 	[]order.Order
+// @Failure      500  {object}  handler.ErrorResponse "Internal error"
+// @Router       /orders [get]
 func (h *Handler) getOrderList(w http.ResponseWriter, r *http.Request) {
 	orders, err := h.service.List(r.Context())
 	if err != nil {
 		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+		writeJSON(w, pe.Status, pe.ErrorResponse)
 		return
 	}
 	writeJSON(w, http.StatusOK, orders)
 }
 
+// UpdateStatus godoc
+// @Summary      Update status
+// @Description  Update status of order with given ID.
+// @Tags         orders
+// @Accept       json
+// @Produce      json
+// @Param 	     id path int true "Order ID"
+// @Param 	     status body order.UpdateStatusInput true "Updated status"
+// @Success      200  {object} 	order.Order
+// @Failure      400  {object}  handler.ErrorResponse "Invalid ID"
+// @Failure      400  {object}  handler.ErrorResponse "Invalid status"
+// @Failure      404  {object}  handler.ErrorResponse "Order not found"
+// @Failure      409  {object}  handler.ErrorResponse "Forbidden status transition"
+// @Failure      500  {object}  handler.ErrorResponse "Internal error"
+// @Router       /orders/{id}/status [patch]
 func (h *Handler) updateStatus(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
 		return
 	}
 	decoder := json.NewDecoder(r.Body)
 	var data order.UpdateStatusInput
-	err = decoder.Decode(&data)
-	if err != nil {
-		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+	if err := decoder.Decode(&data); err != nil {
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{
+			Error: "Invalid JSON",
+			Code:  ecInvalidJSON,
+		})
 		return
 	}
 	ord, err := h.service.UpdateStatus(r.Context(), id, data.Status)
 	if err != nil {
 		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+		writeJSON(w, pe.Status, pe.ErrorResponse)
 		return
 	}
-	writeJSON(w, http.StatusCreated, ord)
+	writeJSON(w, http.StatusOK, ord)
 }
 
+// GetHistory godoc
+// @Summary      Get history
+// @Description  Get status update history for order by given ID
+// @Tags         orders
+// @Produce      json
+// @Param 	     id path int true "Order ID"
+// @Success      200  {object} 	[]order.StatusChange
+// @Failure      400  {object}  handler.ErrorResponse "Invalid ID"
+// @Failure      404  {object}  handler.ErrorResponse "Order not found"
+// @Failure      500  {object}  handler.ErrorResponse "Internal error"
+// @Router       /orders/{id}/history [get]
 func (h *Handler) getHistory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil || id <= 0 {
-		writeJSON(w, http.StatusBadRequest, errorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
+		writeJSON(w, http.StatusBadRequest, ErrorResponse{Code: ecValidationFail, Error: "Invalid order ID"})
 		return
 	}
 	history, err := h.service.History(r.Context(), id)
 	if err != nil {
 		pe := parseError(err)
-		writeJSON(w, pe.Status, pe.errorResponse)
+		writeJSON(w, pe.Status, pe.ErrorResponse)
 		return
 	}
 	writeJSON(w, http.StatusOK, history)
 }
 
-type errorResponse struct {
+type ErrorResponse struct {
 	Error string `json:"error"`
 	Code  string `json:"code"`
 }
@@ -146,7 +206,7 @@ const (
 )
 
 type parsedError struct {
-	errorResponse
+	ErrorResponse
 	Status int
 }
 
@@ -154,27 +214,27 @@ func parseError(err error) parsedError {
 	switch {
 	case errors.Is(err, order.ErrInvalidOrder):
 		return parsedError{
-			errorResponse: errorResponse{Error: "Invalid order", Code: ecValidationFail},
+			ErrorResponse: ErrorResponse{Error: "Invalid order", Code: ecValidationFail},
 			Status:        http.StatusBadRequest,
 		}
 	case errors.Is(err, order.ErrInvalidStatus):
 		return parsedError{
-			errorResponse: errorResponse{Error: "Invalid status", Code: ecValidationFail},
+			ErrorResponse: ErrorResponse{Error: "Invalid status", Code: ecValidationFail},
 			Status:        http.StatusBadRequest,
 		}
 	case errors.Is(err, order.ErrOrderNotFound):
 		return parsedError{
-			errorResponse: errorResponse{Error: "Order not found", Code: ecNotFound},
+			ErrorResponse: ErrorResponse{Error: "Order not found", Code: ecNotFound},
 			Status:        http.StatusNotFound,
 		}
 	case errors.Is(err, order.ErrInvalidStatusTransition):
 		return parsedError{
-			errorResponse: errorResponse{Error: "Status transition is not allowed", Code: ecInvalidStatusTransition},
-			Status:        http.StatusBadRequest,
+			ErrorResponse: ErrorResponse{Error: "Status transition is not allowed", Code: ecInvalidStatusTransition},
+			Status:        http.StatusConflict,
 		}
 	default:
 		return parsedError{
-			errorResponse: errorResponse{Error: "Internal error", Code: ecInternal},
+			ErrorResponse: ErrorResponse{Error: "Internal error", Code: ecInternal},
 			Status:        http.StatusInternalServerError,
 		}
 	}

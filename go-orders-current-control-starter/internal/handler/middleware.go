@@ -37,13 +37,13 @@ func requestLoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handl
 			sw := &statusWriter{ResponseWriter: w}
 			next.ServeHTTP(sw, r.WithContext(ctx))
 			logger.Info("http_request",
-			"request_id", requestIDFromContext(r.Context()),
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", sw.status,
-			"duration_ms", time.Since(start).Milliseconds(),
-		)
-	})
+				"request_id", id,
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", sw.status,
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		})
 	}
 }
 
@@ -54,7 +54,7 @@ func recoveryMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			defer func() {
 				if value := recover(); value != nil {
 					logger.Error("panic recovery", "request_id", requestIDFromContext(r.Context()))
-					writeJSON(w, 500, errorResponse{Error: "Internal server error", Code: ecInternal})
+					writeJSON(w, 500, ErrorResponse{Error: "Internal server error", Code: ecInternal})
 				}
 			}()
 			next.ServeHTTP(w, r)
