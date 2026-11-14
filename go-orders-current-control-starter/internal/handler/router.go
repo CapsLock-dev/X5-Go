@@ -132,14 +132,6 @@ func (h *Handler) getHistory(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, history)
 }
 
-func (h *Handler) notImplemented(w http.ResponseWriter, _ *http.Request) {
-	// TODO: replace this placeholder with separate handlers for every endpoint.
-	writeJSON(w, http.StatusNotImplemented, errorResponse{
-		Error: "endpoint is not implemented",
-		Code:  "NOT_IMPLEMENTED",
-	})
-}
-
 type errorResponse struct {
 	Error string `json:"error"`
 	Code  string `json:"code"`
