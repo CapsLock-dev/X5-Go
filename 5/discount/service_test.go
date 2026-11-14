@@ -26,6 +26,8 @@ func TestValidatePercent(t *testing.T) {
 			err := ValidatePercent(tt.discountPercent)
 			if tt.wantError != nil {
 				assert.ErrorIs(t, err, tt.wantError)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -44,6 +46,7 @@ func TestApply(t *testing.T) {
 		{"100% discount", 1000, 100, 0, nil},
 		{"negative price", -1, 15, 0, ErrNegativePrice},
 		{"101% discount", 1000, 101, 0, ErrInvalidPercent},
+		{"Negative discount", 1000, -1, 0, ErrInvalidPercent},
 	}
 
 	for _, tt := range tests {
@@ -52,6 +55,7 @@ func TestApply(t *testing.T) {
 			got, err := Apply(tt.price, tt.discountPercent)
 			if tt.wantError != nil {
 				assert.ErrorIs(t, err, tt.wantError)
+				assert.Equal(t, got, 0)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, got, tt.wantValue)
@@ -79,6 +83,7 @@ func TestFinalPrice(t *testing.T) {
 			got, err := FinalPrice(tt.items)
 			if tt.wantError != nil {
 				assert.ErrorIs(t, err, tt.wantError)
+				assert.Equal(t, got, 0)
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, got, tt.wantValue)
